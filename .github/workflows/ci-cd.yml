@@ -1,0 +1,48 @@
+name: CI/CD
+
+# Runs on every push/PR to main -- this is the "continuous" part of CI/CD:
+# every change is validated automatically, not manually before each release.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    name: Train model + run tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Train model (populates MLflow registry + baseline stats)
+        run: python src/train.py
+
+      - name: Run test suite
+        run: python -m pytest tests/ -v
+
+  build-image:
+    name: Build Docker image
+    needs: test  # only runs if the test job above passed
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build API image
+        run: docker build -t subscription-upgrade-api:${{ github.sha }} .
+
+      # In a real deployment you'd add a step here to push this image to a
+      # registry (Docker Hub / ECR / GCR) and trigger a deploy, e.g.:
+      #
+      # - name: Push to registry
+      #   run: |
+      #     docker tag subscription-upgrade-api:${{ github.sha }} myregistry/subscription-upgrade-api:latest
+      #     docker push myregistry/subscription-upgrade-api:latest
