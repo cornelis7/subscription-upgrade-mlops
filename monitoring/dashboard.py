@@ -1,13 +1,12 @@
-import sqlite3
-from pathlib import Path
-
 import httpx
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
-DB_PATH = Path("models/monitoring.db")
-API_URL = "http://localhost:8000"
+# In production this points at the deployed FastAPI service (set via
+# Streamlit secrets: API_URL = "https://your-api.onrender.com").
+# Locally it falls back to the API running in Docker/uvicorn on your machine.
+API_URL = st.secrets.get("API_URL", "http://localhost:8000")
 
 st.set_page_config(
     page_title="Model Monitoring",
@@ -87,17 +86,17 @@ st.markdown(
 st.markdown("# 📡 Subscription upgrade model — monitoring")
 st.caption("Live view of production traffic, prediction outcomes, and data drift.")
 
-if not DB_PATH.exists():
+try:
+    history = httpx.get(f"{API_URL}/monitoring/history", timeout=10).json()
+except httpx.ConnectError:
+    st.error(f"Can't reach the API at {API_URL} — is it deployed and running?")
+    st.stop()
+
+if not history:
     st.info("No predictions logged yet. Send a few requests to the `/predict` endpoint first.")
     st.stop()
 
-conn = sqlite3.connect(DB_PATH)
-df = pd.read_sql("SELECT * FROM predictions ORDER BY id ASC", conn)
-conn.close()
-
-if df.empty:
-    st.info("No predictions logged yet.")
-    st.stop()
+df = pd.DataFrame(history)
 
 df["timestamp"] = pd.to_datetime(df["timestamp"], unit="s")
 
