@@ -4,7 +4,7 @@ from fastapi import FastAPI, HTTPException
 
 from app.schemas import PredictionRequest, PredictionResponse
 from app.model_loader import get_model, reload_model
-from app.monitoring import log_prediction, check_drift, FEATURE_NAMES
+from app.monitoring import log_prediction, check_drift, get_predictions, FEATURE_NAMES
 
 
 @asynccontextmanager
@@ -75,3 +75,11 @@ def predict(request: PredictionRequest):
 def drift_status():
     """Full drift report -- this is what the monitoring dashboard reads."""
     return check_drift()
+
+
+@app.get("/monitoring/history")
+def monitoring_history(limit: int = 500):
+    """Recent logged predictions as JSON. The dashboard calls this over
+    HTTP instead of reading the SQLite file directly, since in production
+    it runs on a separate host from the API and doesn't share a disk."""
+    return get_predictions(limit=limit)
